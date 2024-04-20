@@ -1,13 +1,11 @@
 import moment from 'moment';
-import { App, Editor, MarkdownView, Modal, Plugin, PluginSettingTab, Setting, debounce } from 'obsidian';
+import { App, Editor, MarkdownView, Plugin, PluginSettingTab, Setting, debounce } from 'obsidian';
+import { getDailyNoteSettings } from 'obsidian-daily-notes-interface';
 
 
 // TODO: Add replacementInterval to settings modal.
-// TODO: Add format option for log lines
 // TODO: Setting to force list or not.
 // TODO: Document property toggle for enable
-// TODO: Audo header insertion with todays note linked
-// TODO: Setting for formatting log titles and detecting
 
 interface TimelogSettings {
 	mySetting: string;
@@ -26,6 +24,7 @@ const DEFAULT_SETTINGS: TimelogSettings = {
 export default class TimelogPlugin extends Plugin {
 	settings: TimelogSettings;
 
+	dailyNoteFormat?: string;
 	lastReplacement?: Date;
 
 	async onload() {
@@ -36,6 +35,9 @@ export default class TimelogPlugin extends Plugin {
 			debounce(this.onEditorChange.bind(this), 1000, false)
 		));
 
+		const { format } = getDailyNoteSettings();
+		this.dailyNoteFormat = format;
+
 		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
 		const statusBarItemEl = this.addStatusBarItem();
 		statusBarItemEl.setText('Logging Active');
@@ -45,8 +47,12 @@ export default class TimelogPlugin extends Plugin {
 			id: 'sample-editor-command',
 			name: 'Start Log Entry',
 			editorCallback: (editor: Editor) => {
-				console.log(editor.getSelection());
-				editor.replaceSelection('## Log {date}\n\n');
+				if (this.dailyNoteFormat) {
+					const date = moment().format(this.dailyNoteFormat);
+					editor.replaceSelection(`## [[${date}]]\n\n`);
+				} else {
+					editor.replaceSelection(`## Log \n\n`);
+				}
 			}
 		});
 
@@ -67,6 +73,7 @@ export default class TimelogPlugin extends Plugin {
 		// Insert a log line below the current line
 		const cursor = editor.getCursor();
 		let logDate;
+
 		try {
 			logDate = moment().format(this.settings.dateFormat);
 		} catch (e) {
@@ -88,7 +95,7 @@ export default class TimelogPlugin extends Plugin {
 	}
 
 	isInsideLogConext(editor: Editor) {
-		const interval = 5 // this.settings.replacementInterval;
+		const interval = this.settings.replacementInterval;
 		// Determine if last replacement run in past X minutes
 		if (this.lastReplacement &&
 			(new Date().getTime() - this.lastReplacement.getTime()) < interval * 1000) {
@@ -176,7 +183,6 @@ class TimelogSettingTab extends PluginSettingTab {
 					this.plugin.settings.replacementInterval = value * 60;
 					await this.plugin.saveSettings();
 				}));
-
 
 		new Setting(containerEl)
 			.setName('Log Format')
