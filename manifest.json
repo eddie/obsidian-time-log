@@ -1,11 +1,11 @@
 {
-	"id": "sample-plugin",
-	"name": "Sample Plugin",
+	"id": "time-log",
+	"name": "Timelog",
 	"version": "1.0.0",
 	"minAppVersion": "0.15.0",
-	"description": "Demonstrates some of the capabilities of the Obsidian API.",
-	"author": "Obsidian",
-	"authorUrl": "https://obsidian.md",
-	"fundingUrl": "https://obsidian.md/pricing",
+	"description": "Lab notebook style time tracking for Obsidian",
+	"author": "Eddie Blundell",
+	"authorUrl": "https://hakobox.co.uk",
+	"fundingUrl": "https://github.com/sponsors/hakoboxsoftware",
 	"isDesktopOnly": false
 }
