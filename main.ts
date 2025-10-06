@@ -3,6 +3,7 @@ import {
 	App,
 	Editor,
 	MarkdownView,
+	Notice,
 	Plugin,
 	PluginSettingTab,
 	Setting,
@@ -10,9 +11,6 @@ import {
 } from 'obsidian';
 import { getDailyNoteSettings } from 'obsidian-daily-notes-interface';
 
-// TODO: Document property toggle for enable
-// TODO: Automatic / Manual mode -> shortcuts.
-// TODO: Extract the header logic tests e.g log vs date
 
 interface TimelogSettings {
 	replacementInterval: number;
@@ -28,10 +26,12 @@ const DEFAULT_SETTINGS: TimelogSettings = {
 	logFormat: 'HH:mm',
 };
 
+const DEFAULT_HEADER_FORMAT = 'YYYY-MM-DD';
+
 export default class TimelogPlugin extends Plugin {
 	settings: TimelogSettings;
 
-	dailyNoteFormat?: string;
+	dailyNoteFormat: string = DEFAULT_HEADER_FORMAT;
 	lastReplacement?: Date;
 	statusBarItemEl: HTMLElement;
 
@@ -50,13 +50,18 @@ export default class TimelogPlugin extends Plugin {
 			),
 		);
 
-		const { format } = getDailyNoteSettings();
-		this.dailyNoteFormat = format;
+		const dailySettings = getDailyNoteSettings();
+		this.dailyNoteFormat = dailySettings?.format ?? DEFAULT_HEADER_FORMAT;
 
 		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
 		this.statusBarItemEl = this.addStatusBarItem();
-		this.statusBarItemEl.setText(
-			`Logging active ${this.settings.replacementInterval}s`,
+		this.statusBarItemEl.style.display = 'none';
+		this.updateStatusBar();
+
+		this.registerEvent(
+			this.app.workspace.on('active-leaf-change', () => {
+				this.updateStatusBar();
+			}),
 		);
 
 		// Start new logging day
@@ -64,20 +69,43 @@ export default class TimelogPlugin extends Plugin {
 			id: 'sample-editor-command',
 			name: 'Start Log Entry',
 			editorCallback: (editor: Editor) => {
-				if (this.dailyNoteFormat) {
-					const date = moment().format(this.dailyNoteFormat);
-					editor.replaceSelection(`## [[${date}]]\n\n`);
-				} else {
-					editor.replaceSelection(`## Log \n\n`);
-				}
+				const date = moment().format(this.dailyNoteFormat);
+				editor.replaceSelection(`## [[${date}]]\n\n`);
+				this.updateStatusBar(editor);
 			},
 		});
 
-		// This adds a settings tab so the user can configure various aspects of the plugin
+		this.addCommand({
+			id: 'jump-to-latest-log-header',
+			name: 'Jump to Latest Log Header',
+			editorCallback: (editor: Editor) => {
+				const targetLine = this.findLatestDatedHeader(editor);
+				if (targetLine === null) {
+					new Notice('No dated headers found');
+					return;
+				}
+
+				const desiredLine = targetLine + 1;
+				if (desiredLine >= editor.lineCount()) {
+					const headerText = editor.getLine(targetLine);
+					editor.replaceRange('\n', {
+						line: targetLine,
+						ch: headerText.length,
+					});
+				}
+
+				const cursorLine = Math.min(targetLine + 1, editor.lineCount() - 1);
+				const cursor = { line: cursorLine, ch: 0 };
+				editor.setCursor(cursor);
+				editor.scrollIntoView({ from: cursor, to: cursor }, true);
+			},
+		});
+
 		this.addSettingTab(new TimelogSettingTab(this.app, this));
 	}
 
 	onEditorChange(editor: Editor, view: MarkdownView) {
+		this.updateStatusBar(editor);
 		if (!this.shouldInsertLine(editor)) {
 			return;
 		}
@@ -86,7 +114,6 @@ export default class TimelogPlugin extends Plugin {
 
 	/** 
 	 * Inserts a log line into the editor at the current cursor position
-	 * 
 	*/
 	insertLogLine(editor: Editor): boolean {
 		const cursor = editor.getCursor();
@@ -111,6 +138,73 @@ export default class TimelogPlugin extends Plugin {
 		} catch (e) {
 			return moment().format(DEFAULT_SETTINGS.logFormat);
 		}
+	}
+
+	findLatestDatedHeader(editor: Editor): number | null {
+		let latestLine: number | null = null;
+		let latestDate: moment.Moment | null = null;
+		const lines = editor.lineCount();
+
+		for (let lineNumber = 0; lineNumber < lines; lineNumber++) {
+			const parsed = this.extractHeaderDate(editor.getLine(lineNumber));
+			if (!parsed) {
+				continue;
+			}
+
+			if (!latestDate || parsed.isAfter(latestDate)) {
+				latestDate = parsed;
+				latestLine = lineNumber;
+			}
+		}
+
+		return latestLine;
+	}
+
+	extractHeaderDate(line: string): moment.Moment | null {
+		const trimmed = line.trim();
+		if (!trimmed.startsWith('#')) {
+			return null;
+		}
+
+		const content = trimmed.replace(/^#+\s*/, '').trim();
+		const linkMatch = content.match(/\[\[(.+?)\]\]/);
+		const linkContent = linkMatch ? linkMatch[1] : content;
+		const dateText = linkContent.split('|')[0];
+		const parsed = moment(dateText, this.dailyNoteFormat, true);
+
+		return parsed.isValid() ? parsed : null;
+	}
+
+	updateStatusBar(editor?: Editor) {
+		if (!this.statusBarItemEl) {
+			return;
+		}
+
+		const activeEditor = editor ?? this.getActiveEditor();
+		if (!activeEditor || !this.hasDatedHeader(activeEditor)) {
+			this.statusBarItemEl.style.display = 'none';
+			return;
+		}
+
+		this.statusBarItemEl.style.display = '';
+		this.statusBarItemEl.setText(
+			`Logging active ${this.settings.replacementInterval}s`,
+		);
+	}
+
+	getActiveEditor(): Editor | null {
+		const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+		return view?.editor ?? null;
+	}
+
+	hasDatedHeader(editor: Editor): boolean {
+		const lines = editor.lineCount();
+		for (let lineNumber = 0; lineNumber < lines; lineNumber++) {
+			if (this.extractHeaderDate(editor.getLine(lineNumber))) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	shouldInsertLine(editor: Editor) {
@@ -175,13 +269,7 @@ export default class TimelogPlugin extends Plugin {
 	}
 
 	isLogHeader(line: string) {
-		if (this.dailyNoteFormat) {
-			const formatHyphens = (this.dailyNoteFormat.match(/-/g) || [])
-				.length;
-			const actualHyphens = (line.match(/-/g) || []).length;
-			return formatHyphens === actualHyphens;
-		}
-		return line.startsWith('#') && line.toLowerCase().includes('log');
+		return this.extractHeaderDate(line) !== null;
 	}
 
 	isNormalHeader(line: string) {
@@ -199,20 +287,6 @@ export default class TimelogPlugin extends Plugin {
 
 		return moment(l, this.settings.logFormat).isValid();
 	}
-
-	onunload() { }
-
-	// findMostRecentHeader(editor: Editor, lineNumber: number) {
-	// 	let currentLine = lineNumber;
-	// 	while (currentLine > 0) {
-	// 		const line = editor.getLine(currentLine);
-	// 		if (this.isLogHeader(line)) {
-	// 			return line;
-	// 		}
-	// 		currentLine--;
-	// 	}
-	// 	return null;
-	// }
 
 	async loadSettings() {
 		this.settings = Object.assign(
@@ -258,6 +332,7 @@ class TimelogSettingTab extends PluginSettingTab {
 					.onChange(async (value) => {
 						this.plugin.settings.replacementInterval = value;
 						await this.plugin.saveSettings();
+						this.plugin.updateStatusBar();
 					})
 					.setDynamicTooltip(),
 			);
@@ -274,6 +349,7 @@ class TimelogSettingTab extends PluginSettingTab {
 					.onChange(async (value) => {
 						this.plugin.settings.logFormat = value;
 						await this.plugin.saveSettings();
+						this.plugin.updateStatusBar();
 					}),
 			);
 
@@ -286,6 +362,7 @@ class TimelogSettingTab extends PluginSettingTab {
 					.onChange(async (value) => {
 						this.plugin.settings.useList = value;
 						await this.plugin.saveSettings();
+						this.plugin.updateStatusBar();
 					}),
 			);
 	}
