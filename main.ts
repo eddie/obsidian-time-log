@@ -13,7 +13,6 @@ import { getDailyNoteSettings } from 'obsidian-daily-notes-interface';
 // TODO: Document property toggle for enable
 // TODO: Automatic / Manual mode -> shortcuts.
 // TODO: Extract the header logic tests e.g log vs date
-// NOTE: If list mode, we only replace on the bullet- not gaps between
 
 interface TimelogSettings {
 	replacementInterval: number;
@@ -46,9 +45,9 @@ export default class TimelogPlugin extends Plugin {
 				debounce(
 					this.onEditorChange.bind(this),
 					this.settings.debounceMs,
-					false
-				)
-			)
+					false,
+				),
+			),
 		);
 
 		const { format } = getDailyNoteSettings();
@@ -57,7 +56,7 @@ export default class TimelogPlugin extends Plugin {
 		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
 		this.statusBarItemEl = this.addStatusBarItem();
 		this.statusBarItemEl.setText(
-			`Logging Active ${this.settings.replacementInterval}s`
+			`Logging active ${this.settings.replacementInterval}s`,
 		);
 
 		// Start new logging day
@@ -79,66 +78,44 @@ export default class TimelogPlugin extends Plugin {
 	}
 
 	onEditorChange(editor: Editor, view: MarkdownView) {
-		// Determine if we are in the
-		if (this.isInsideLogConext(editor)) {
-			// Append a line below current cursor
-			if (this.insertLogLine(editor)) {
-				this.lastReplacement = new Date();
-			}
+		if (!this.shouldInsertLine(editor)) {
+			return;
 		}
+		this.insertLogLine(editor);
 	}
 
-	shouldInsertLogLine(editor: Editor): boolean {}
-
+	/** 
+	 * Inserts a log line into the editor at the current cursor position
+	 * 
+	*/
 	insertLogLine(editor: Editor): boolean {
-		// Insert a log line below the current line
 		const cursor = editor.getCursor();
-		let logDate;
+		const logPrefix = this.getFormattedLogPrefix();
+		const logHeader = `**${logPrefix}**: `;
+		const line = editor.getLine(cursor.line);
+		let offset = line.indexOf('*') + 2;
 
-		try {
-			logDate = moment().format(this.settings.logFormat);
-		} catch (e) {
-			logDate = moment().format(DEFAULT_SETTINGS.logFormat);
-		}
-
-		const logHeader = `**${logDate}**: `;
-		const spacing = 2;
-		let offset = editor.getLine(cursor.line).indexOf('*');
-
-		// First lets check if we already have some writing here on this line, heuristically
-		if (editor.getLine(cursor.line).trim().length > 2) {
-			return false;
-		}
-
-		if (this.settings.useList && offset < 0) {
-			console.info('Not a list item, skipping');
-			return false;
-		}
-
-		// Account for case where hyphen is found, even at position 0
-		if (offset >= 0) {
-			offset = offset + spacing;
-		} else {
-			offset = 0;
-		}
 		editor.replaceRange(logHeader, { line: cursor.line, ch: offset });
 		editor.setCursor({
 			line: cursor.line,
 			ch: cursor.ch + logHeader.length,
 		});
+		this.lastReplacement = new Date();
 
 		return true;
 	}
 
-	isInsideLogConext(editor: Editor) {
-		const interval = this.settings.replacementInterval;
+	getFormattedLogPrefix() {
+		try {
+			return moment().format(this.settings.logFormat);
+		} catch (e) {
+			return moment().format(DEFAULT_SETTINGS.logFormat);
+		}
+	}
 
-		// Determine if last replacement run in past X seconds
-		if (
-			this.lastReplacement &&
-			new Date().getTime() - this.lastReplacement.getTime() <
-				interval * 1000
-		) {
+	shouldInsertLine(editor: Editor) {
+
+		if (!this.isWithinInterval()) {
 			return false;
 		}
 
@@ -152,6 +129,24 @@ export default class TimelogPlugin extends Plugin {
 			return false;
 		}
 
+		const hasList = line.trim().startsWith('*');
+		const isNested = line.startsWith('\t');
+
+		if (this.settings.useList) {
+			// Obsidian has completed italics/bold for us so wait.
+			if (line.indexOf('**') === 0) {
+				return false;
+			}
+			// TODO: add setting for nesting level.
+			// we would then log by minute & Second to avoid collisions.
+			if (isNested) {
+				return false;
+			}
+			if (!hasList) {
+				return false;
+			}
+		}
+
 		// Look for log headers above the current line
 		while (currentLine-- > 0) {
 			line = editor.getLine(currentLine);
@@ -163,6 +158,20 @@ export default class TimelogPlugin extends Plugin {
 		}
 
 		return false;
+	}
+
+	// Determine if last replacement run in past X seconds
+	isWithinInterval() {
+		const interval = this.settings.replacementInterval;
+
+		if (
+			this.lastReplacement &&
+			new Date().getTime() - this.lastReplacement.getTime() <
+			interval * 1000
+		) {
+			return false;
+		}
+		return true;
 	}
 
 	isLogHeader(line: string) {
@@ -191,13 +200,25 @@ export default class TimelogPlugin extends Plugin {
 		return moment(l, this.settings.logFormat).isValid();
 	}
 
-	onunload() {}
+	onunload() { }
+
+	// findMostRecentHeader(editor: Editor, lineNumber: number) {
+	// 	let currentLine = lineNumber;
+	// 	while (currentLine > 0) {
+	// 		const line = editor.getLine(currentLine);
+	// 		if (this.isLogHeader(line)) {
+	// 			return line;
+	// 		}
+	// 		currentLine--;
+	// 	}
+	// 	return null;
+	// }
 
 	async loadSettings() {
 		this.settings = Object.assign(
 			{},
 			DEFAULT_SETTINGS,
-			await this.loadData()
+			await this.loadData(),
 		);
 	}
 
@@ -224,21 +245,21 @@ class TimelogSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName('Minimum Log Duration')
 			.setDesc(
-				'Minimum time in seconds between log entries being prefixed'
+				'Minimum time in seconds between log entries being prefixed',
 			)
 			.addSlider((slider) =>
 				slider
 					.setValue(
 						this.plugin.settings.replacementInterval
 							? this.plugin.settings.replacementInterval
-							: 60
+							: 60,
 					)
 					.setLimits(1, 180, 1)
 					.onChange(async (value) => {
 						this.plugin.settings.replacementInterval = value;
 						await this.plugin.saveSettings();
 					})
-					.setDynamicTooltip()
+					.setDynamicTooltip(),
 			);
 
 		new Setting(containerEl)
@@ -248,12 +269,12 @@ class TimelogSettingTab extends PluginSettingTab {
 				format
 					.setValue(
 						this.plugin.settings.logFormat ??
-							DEFAULT_SETTINGS.logFormat
+						DEFAULT_SETTINGS.logFormat,
 					)
 					.onChange(async (value) => {
 						this.plugin.settings.logFormat = value;
 						await this.plugin.saveSettings();
-					})
+					}),
 			);
 
 		new Setting(containerEl)
@@ -265,7 +286,7 @@ class TimelogSettingTab extends PluginSettingTab {
 					.onChange(async (value) => {
 						this.plugin.settings.useList = value;
 						await this.plugin.saveSettings();
-					})
+					}),
 			);
 	}
 }
