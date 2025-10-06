@@ -69,6 +69,22 @@ Example (adjust paths to your vault):
 ln -s ~/src/obsidian-time-log ~/Documents/Obsidian/.obsidian/plugins/obsidian-time-log
 ```
 
+## Releasing new versions
+
+This repo uses a GitHub Actions workflow that publishes artifacts whenever you push a version tag.
+
+1. Bump the version in `manifest.json` and `package.json` (the `npm run version` helper can update `manifest.json` and `versions.json` for you).
+2. Update `versions.json` with the new version → minimum Obsidian version mapping.
+3. Run `npm run build`.
+4. Commit your changes and tag the release:
+
+   ```bash
+   git tag -a 1.0.1 -m "1.0.1"
+   git push origin 1.0.1
+   ```
+
+   The GitHub Action uploads `manifest.json`, `main.js`, and `styles.css` as release assets automatically.
+
 ## License
 
 MIT
