@@ -55,7 +55,7 @@ export default class TimelogPlugin extends Plugin {
 
 		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
 		this.statusBarItemEl = this.addStatusBarItem();
-		this.statusBarItemEl.style.display = 'none';
+		this.statusBarItemEl.hide();
 		this.updateStatusBar();
 
 		this.registerEvent(
@@ -66,7 +66,7 @@ export default class TimelogPlugin extends Plugin {
 
 		// Start new logging day
 		this.addCommand({
-			id: 'sample-editor-command',
+			id: 'start-log-entry',
 			name: 'Start Log Entry',
 			editorCallback: (editor: Editor) => {
 				const date = moment().format(this.dailyNoteFormat);
@@ -182,11 +182,12 @@ export default class TimelogPlugin extends Plugin {
 
 		const activeEditor = editor ?? this.getActiveEditor();
 		if (!activeEditor || !this.hasDatedHeader(activeEditor)) {
-			this.statusBarItemEl.style.display = 'none';
+			this.statusBarItemEl.hide();
 			return;
 		}
 
-		this.statusBarItemEl.style.display = '';
+		this.statusBarItemEl.show();
+
 		this.statusBarItemEl.setText(
 			`Logging active ${this.settings.replacementInterval}s`,
 		);
