@@ -243,8 +243,23 @@ export default class TimelogPlugin extends Plugin {
 		}
 
 		// Look for log headers above the current line
+		// Track code fence state - when walking upward, hitting a fence
+		// means we're entering a code block from below
+		let inCodeBlock = false;
+
 		while (currentLine-- > 0) {
 			line = editor.getLine(currentLine);
+
+			if (this.isCodeFence(line)) {
+				inCodeBlock = !inCodeBlock;
+				continue;
+			}
+
+			// Skip header detection inside code blocks
+			if (inCodeBlock) {
+				continue;
+			}
+
 			if (this.isLogHeader(line)) {
 				return true;
 			} else if (this.isNormalHeader(line)) {
@@ -275,6 +290,11 @@ export default class TimelogPlugin extends Plugin {
 
 	isNormalHeader(line: string) {
 		return line.startsWith('#');
+	}
+
+	isCodeFence(line: string) {
+		const trimmed = line.trim();
+		return trimmed.startsWith('```') || trimmed.startsWith('~~~');
 	}
 
 	isLoggedLine(line: string) {
