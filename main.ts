@@ -1,4 +1,3 @@
-import moment from 'moment';
 import {
 	App,
 	Editor,
@@ -7,6 +6,7 @@ import {
 	Plugin,
 	PluginSettingTab,
 	Setting,
+	moment,
 	debounce,
 } from 'obsidian';
 import { getDailyNoteSettings } from 'obsidian-daily-notes-interface';
