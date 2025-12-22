@@ -67,7 +67,7 @@ export default class TimelogPlugin extends Plugin {
 		// Start new logging day
 		this.addCommand({
 			id: 'start-log-entry',
-			name: 'Start Log Entry',
+			name: 'Start log entry',
 			editorCallback: (editor: Editor) => {
 				const date = moment().format(this.dailyNoteFormat);
 				editor.replaceSelection(`## [[${date}]]\n\n`);
@@ -77,7 +77,7 @@ export default class TimelogPlugin extends Plugin {
 
 		this.addCommand({
 			id: 'jump-to-latest-log-header',
-			name: 'Jump to Latest Log Header',
+			name: 'Jump to latest log header',
 			editorCallback: (editor: Editor) => {
 				const targetLine = this.findLatestDatedHeader(editor);
 				if (targetLine === null) {
@@ -335,10 +335,8 @@ class TimelogSettingTab extends PluginSettingTab {
 
 		containerEl.empty();
 
-		new Setting(containerEl).setHeading().setName('Timelog Settings');
-
 		new Setting(containerEl)
-			.setName('Minimum Log Duration')
+			.setName('Minimum log duration')
 			.setDesc(
 				'Minimum time in seconds between log entries being prefixed',
 			)
@@ -359,7 +357,7 @@ class TimelogSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName('Log Format')
+			.setName('Log format')
 			.setDesc('Format of timestamp to prefix log entries e.g HH:MM')
 			.addMomentFormat((format) =>
 				format
@@ -375,7 +373,7 @@ class TimelogSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName('Use Lists Only')
+			.setName('Use lists only')
 			.setDesc('Use lists for log entries')
 			.addToggle((toggle) =>
 				toggle

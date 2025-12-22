@@ -7,9 +7,9 @@ The plugin uses your Daily Note settings (if enabled) to match your preferred da
 ## Core workflow
 
 - Create or open your running project log note.
-- Add a heading for the current day (use the **Start Log Entry** command to insert `## [[YYYY-MM-DD]]`).
+- Add a heading for the current day (use the **Start log entry** command to insert `## [[YYYY-MM-DD]]`).
 - Capture entries as list items; Timelog can automatically prefix them with the current time.
-- Jump back to the latest dated section at any time with **Jump to Latest Log Header**.
+- Jump back to the latest dated section at any time with **Jump to latest log header**.
 
 Example snippet:
 
@@ -33,8 +33,8 @@ Example snippet:
 
 | Command | Description |
 | --- | --- |
-| **Start Log Entry** | Inserts a new dated level-2 heading (`## [[YYYY-MM-DD]]`) and places the cursor beneath it. |
-| **Jump to Latest Log Header** | Scrolls to the newest dated heading, ensures there is writing space, and focuses the cursor just below the heading. |
+| **Start log entry** | Inserts a new dated level-2 heading (`## [[YYYY-MM-DD]]`) and places the cursor beneath it. |
+| **Jump to latest log header** | Scrolls to the newest dated heading, ensures there is writing space, and focuses the cursor just below the heading. |
 
 Assign hotkeys to these commands in Obsidian’s settings for quick access.
 
@@ -42,16 +42,16 @@ Assign hotkeys to these commands in Obsidian’s settings for quick access.
 
 Open **Settings → Community Plugins → Timelog** to configure:
 
-- **Minimum Log Duration** – Seconds between automatic timestamp insertions (prevents duplicate prefixes when you stay on one bullet).
-- **Log Format** – Moment.js format string for the timestamp prefix (defaults to `HH:mm`).
-- **Use Lists Only** – Require log entries to be list items before adding timestamps (ideal for bullet-driven logs).
+- **Minimum log duration** – Seconds between automatic timestamp insertions (prevents duplicate prefixes when you stay on one bullet).
+- **Log format** – Moment.js format string for the timestamp prefix (defaults to `HH:mm`).
+- **Use lists only** – Require log entries to be list items before adding timestamps (ideal for bullet-driven logs).
 
 Changes update the status bar immediately so you always see the current interval.
 
 ## Installation
 
 1. Clone or download this repository.
-2. Copy `main.js`, `manifest.json`, and `styles.css` into your vault at `Vault/.obsidian/plugins/obsidian-time-log/`.
+2. Copy `main.js` and `manifest.json` into your vault at `Vault/.obsidian/plugins/obsidian-time-log/`.
 3. Reload Obsidian and enable **Timelog** from the Community Plugins panel.
 
 ## Development
@@ -83,7 +83,7 @@ This repo uses a GitHub Actions workflow that publishes artifacts whenever you p
    git push origin 1.0.1
    ```
 
-   The GitHub Action uploads `manifest.json`, `main.js`, and `styles.css` as release assets automatically.
+   The GitHub Action uploads `manifest.json` and `main.js` as release assets automatically.
 
 ## License
 
