@@ -27,6 +27,7 @@ const DEFAULT_SETTINGS: TimelogSettings = {
 };
 
 const DEFAULT_HEADER_FORMAT = 'YYYY-MM-DD';
+const LIST_MARKER_REGEX = /^(\s*[-*+]\s+)/;
 
 export default class TimelogPlugin extends Plugin {
 	settings: TimelogSettings;
@@ -120,7 +121,10 @@ export default class TimelogPlugin extends Plugin {
 		const logPrefix = this.getFormattedLogPrefix();
 		const logHeader = `**${logPrefix}**: `;
 		const line = editor.getLine(cursor.line);
-		let offset = line.indexOf('*') + 2;
+		
+		// Find the position after any list marker (-, *, +) and its trailing space
+		const listMatch = line.match(LIST_MARKER_REGEX);
+		const offset = listMatch ? listMatch[1].length : 0;
 
 		editor.replaceRange(logHeader, { line: cursor.line, ch: offset });
 		editor.setCursor({
@@ -224,7 +228,7 @@ export default class TimelogPlugin extends Plugin {
 			return false;
 		}
 
-		const hasList = line.trim().startsWith('*');
+		const hasList = LIST_MARKER_REGEX.test(line);
 		const isNested = line.startsWith('\t');
 
 		if (this.settings.useList) {
