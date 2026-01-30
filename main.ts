@@ -171,10 +171,15 @@ export default class TimelogPlugin extends Plugin {
 			if (headerDate) {
 				const headerDateStr = headerDate.format(this.dailyNoteFormat);
 				if (headerDateStr !== today) {
+					// Check if we need a blank line before the heading
+					const prevLine = cursor.line > 0 ? editor.getLine(cursor.line - 1) : '';
+					const needsBlankLine = cursor.line > 0 && prevLine.trim() !== '';
+					
 					// Date has rolled over, insert new heading
-					const newHeading = `## [[${today}]]\n\n`;
+					const newHeading = (needsBlankLine ? '\n' : '') + `## [[${today}]]\n\n`;
 					editor.replaceRange(newHeading, { line: cursor.line, ch: 0 });
-					editor.setCursor({ line: cursor.line + 2, ch: 0 });
+					const offset = needsBlankLine ? 3 : 2;
+					editor.setCursor({ line: cursor.line + offset, ch: 0 });
 				}
 				return;
 			}
