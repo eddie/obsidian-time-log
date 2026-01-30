@@ -17,6 +17,7 @@ interface TimelogSettings {
 	useList: boolean;
 	logFormat: string;
 	debounceMs: number;
+	autoAddDateHeading: boolean;
 }
 
 const DEFAULT_SETTINGS: TimelogSettings = {
@@ -24,6 +25,7 @@ const DEFAULT_SETTINGS: TimelogSettings = {
 	debounceMs: 500,
 	useList: false,
 	logFormat: 'HH:mm',
+	autoAddDateHeading: true,
 };
 
 const DEFAULT_HEADER_FORMAT = 'YYYY-MM-DD';
@@ -118,6 +120,12 @@ export default class TimelogPlugin extends Plugin {
 	*/
 	insertLogLine(editor: Editor): boolean {
 		const cursor = editor.getCursor();
+		
+		// Check if date has rolled over and we need a new heading
+		if (this.settings.autoAddDateHeading) {
+			this.insertDateHeadingIfNeeded(editor);
+		}
+		
 		const logPrefix = this.getFormattedLogPrefix();
 		const logHeader = `**${logPrefix}**: `;
 		const line = editor.getLine(cursor.line);
@@ -134,6 +142,43 @@ export default class TimelogPlugin extends Plugin {
 		this.lastReplacement = new Date();
 
 		return true;
+	}
+
+	/**
+	 * Checks if the date has changed since the previous heading and inserts a new one if needed
+	 */
+	insertDateHeadingIfNeeded(editor: Editor): void {
+		const cursor = editor.getCursor();
+		const today = moment().format(this.dailyNoteFormat);
+		
+		// Find the nearest dated header above the cursor
+		let currentLine = cursor.line;
+		let inCodeBlock = false;
+		
+		while (currentLine-- > 0) {
+			const line = editor.getLine(currentLine);
+			
+			if (this.isCodeFence(line)) {
+				inCodeBlock = !inCodeBlock;
+				continue;
+			}
+			
+			if (inCodeBlock) {
+				continue;
+			}
+			
+			const headerDate = this.extractHeaderDate(line);
+			if (headerDate) {
+				const headerDateStr = headerDate.format(this.dailyNoteFormat);
+				if (headerDateStr !== today) {
+					// Date has rolled over, insert new heading
+					const newHeading = `## [[${today}]]\n\n`;
+					editor.replaceRange(newHeading, { line: cursor.line, ch: 0 });
+					editor.setCursor({ line: cursor.line + 2, ch: 0 });
+				}
+				return;
+			}
+		}
 	}
 
 	getFormattedLogPrefix() {
@@ -386,6 +431,18 @@ class TimelogSettingTab extends PluginSettingTab {
 						this.plugin.settings.useList = value;
 						await this.plugin.saveSettings();
 						this.plugin.updateStatusBar();
+					}),
+			);
+
+		new Setting(containerEl)
+			.setName('Auto-add date heading')
+			.setDesc('Automatically add a new date heading when the date rolls over (e.g., after midnight)')
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.autoAddDateHeading)
+					.onChange(async (value) => {
+						this.plugin.settings.autoAddDateHeading = value;
+						await this.plugin.saveSettings();
 					}),
 			);
 	}
