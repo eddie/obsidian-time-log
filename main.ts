@@ -119,13 +119,13 @@ export default class TimelogPlugin extends Plugin {
 	 * Inserts a log line into the editor at the current cursor position
 	*/
 	insertLogLine(editor: Editor): boolean {
-		const cursor = editor.getCursor();
-		
 		// Check if date has rolled over and we need a new heading
 		if (this.settings.autoAddDateHeading) {
 			this.insertDateHeadingIfNeeded(editor);
 		}
 		
+		// Get cursor after potential heading insertion
+		const cursor = editor.getCursor();
 		const logPrefix = this.getFormattedLogPrefix();
 		const logHeader = `**${logPrefix}**: `;
 		const line = editor.getLine(cursor.line);
