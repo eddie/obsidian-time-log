@@ -35,7 +35,7 @@ export default class TimelogPlugin extends Plugin {
 	settings: TimelogSettings;
 
 	dailyNoteFormat: string = DEFAULT_HEADER_FORMAT;
-	lastReplacement?: Date;
+	lastReplacements: Map<string, Date> = new Map();
 	statusBarItemEl: HTMLElement;
 
 	async onload() {
@@ -109,16 +109,17 @@ export default class TimelogPlugin extends Plugin {
 
 	onEditorChange(editor: Editor, view: MarkdownView) {
 		this.updateStatusBar(editor);
-		if (!this.shouldInsertLine(editor)) {
+		const filePath = view.file?.path;
+		if (!filePath || !this.shouldInsertLine(editor, filePath)) {
 			return;
 		}
-		this.insertLogLine(editor);
+		this.insertLogLine(editor, filePath);
 	}
 
 	/** 
 	 * Inserts a log line into the editor at the current cursor position
 	*/
-	insertLogLine(editor: Editor): boolean {
+	insertLogLine(editor: Editor, filePath: string): boolean {
 		// Check if date has rolled over and we need a new heading
 		if (this.settings.autoAddDateHeading) {
 			this.insertDateHeadingIfNeeded(editor);
@@ -139,7 +140,7 @@ export default class TimelogPlugin extends Plugin {
 			line: cursor.line,
 			ch: cursor.ch + logHeader.length,
 		});
-		this.lastReplacement = new Date();
+		this.lastReplacements.set(filePath, new Date());
 
 		return true;
 	}
@@ -262,9 +263,9 @@ export default class TimelogPlugin extends Plugin {
 		return false;
 	}
 
-	shouldInsertLine(editor: Editor) {
+	shouldInsertLine(editor: Editor, filePath: string) {
 
-		if (!this.isWithinInterval()) {
+		if (!this.isWithinInterval(filePath)) {
 			return false;
 		}
 
@@ -325,12 +326,13 @@ export default class TimelogPlugin extends Plugin {
 	}
 
 	// Determine if last replacement run in past X seconds
-	isWithinInterval() {
+	isWithinInterval(filePath: string) {
 		const interval = this.settings.replacementInterval;
+		const lastReplacement = this.lastReplacements.get(filePath);
 
 		if (
-			this.lastReplacement &&
-			new Date().getTime() - this.lastReplacement.getTime() <
+			lastReplacement &&
+			new Date().getTime() - lastReplacement.getTime() <
 			interval * 1000
 		) {
 			return false;
