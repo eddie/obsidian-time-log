@@ -17,6 +17,7 @@ interface TimelogSettings {
 	useList: boolean;
 	logFormat: string;
 	debounceMs: number;
+	autoAddDateHeading: boolean;
 }
 
 const DEFAULT_SETTINGS: TimelogSettings = {
@@ -24,15 +25,17 @@ const DEFAULT_SETTINGS: TimelogSettings = {
 	debounceMs: 500,
 	useList: false,
 	logFormat: 'HH:mm',
+	autoAddDateHeading: true,
 };
 
 const DEFAULT_HEADER_FORMAT = 'YYYY-MM-DD';
+const LIST_MARKER_REGEX = /^(\s*[-*+]\s+)/;
 
 export default class TimelogPlugin extends Plugin {
 	settings: TimelogSettings;
 
 	dailyNoteFormat: string = DEFAULT_HEADER_FORMAT;
-	lastReplacement?: Date;
+	lastReplacements: Map<string, Date> = new Map();
 	statusBarItemEl: HTMLElement;
 
 	async onload() {
@@ -106,30 +109,82 @@ export default class TimelogPlugin extends Plugin {
 
 	onEditorChange(editor: Editor, view: MarkdownView) {
 		this.updateStatusBar(editor);
-		if (!this.shouldInsertLine(editor)) {
+		const filePath = view.file?.path;
+		if (!filePath || !this.shouldInsertLine(editor, filePath)) {
 			return;
 		}
-		this.insertLogLine(editor);
+		this.insertLogLine(editor, filePath);
 	}
 
 	/** 
 	 * Inserts a log line into the editor at the current cursor position
 	*/
-	insertLogLine(editor: Editor): boolean {
+	insertLogLine(editor: Editor, filePath: string): boolean {
+		// Check if date has rolled over and we need a new heading
+		if (this.settings.autoAddDateHeading) {
+			this.insertDateHeadingIfNeeded(editor);
+		}
+		
+		// Get cursor after potential heading insertion
 		const cursor = editor.getCursor();
 		const logPrefix = this.getFormattedLogPrefix();
 		const logHeader = `**${logPrefix}**: `;
 		const line = editor.getLine(cursor.line);
-		let offset = line.indexOf('*') + 2;
+		
+		// Find the position after any list marker (-, *, +) and its trailing space
+		const listMatch = line.match(LIST_MARKER_REGEX);
+		const offset = listMatch ? listMatch[1].length : 0;
 
 		editor.replaceRange(logHeader, { line: cursor.line, ch: offset });
 		editor.setCursor({
 			line: cursor.line,
 			ch: cursor.ch + logHeader.length,
 		});
-		this.lastReplacement = new Date();
+		this.lastReplacements.set(filePath, new Date());
 
 		return true;
+	}
+
+	/**
+	 * Checks if the date has changed since the previous heading and inserts a new one if needed
+	 */
+	insertDateHeadingIfNeeded(editor: Editor): void {
+		const cursor = editor.getCursor();
+		const today = moment().format(this.dailyNoteFormat);
+		
+		// Find the nearest dated header above the cursor
+		let currentLine = cursor.line;
+		let inCodeBlock = false;
+		
+		while (currentLine-- > 0) {
+			const line = editor.getLine(currentLine);
+			
+			if (this.isCodeFence(line)) {
+				inCodeBlock = !inCodeBlock;
+				continue;
+			}
+			
+			if (inCodeBlock) {
+				continue;
+			}
+			
+			const headerDate = this.extractHeaderDate(line);
+			if (headerDate) {
+				const headerDateStr = headerDate.format(this.dailyNoteFormat);
+				if (headerDateStr !== today) {
+					// Check if we need a blank line before the heading
+					const prevLine = cursor.line > 0 ? editor.getLine(cursor.line - 1) : '';
+					const needsBlankLine = cursor.line > 0 && prevLine.trim() !== '';
+					
+					// Date has rolled over, insert new heading
+					const newHeading = (needsBlankLine ? '\n' : '') + `## [[${today}]]\n\n`;
+					editor.replaceRange(newHeading, { line: cursor.line, ch: 0 });
+					const offset = needsBlankLine ? 3 : 2;
+					editor.setCursor({ line: cursor.line + offset, ch: 0 });
+				}
+				return;
+			}
+		}
 	}
 
 	getFormattedLogPrefix() {
@@ -208,9 +263,9 @@ export default class TimelogPlugin extends Plugin {
 		return false;
 	}
 
-	shouldInsertLine(editor: Editor) {
+	shouldInsertLine(editor: Editor, filePath: string) {
 
-		if (!this.isWithinInterval()) {
+		if (!this.isWithinInterval(filePath)) {
 			return false;
 		}
 
@@ -224,7 +279,7 @@ export default class TimelogPlugin extends Plugin {
 			return false;
 		}
 
-		const hasList = line.trim().startsWith('*');
+		const hasList = LIST_MARKER_REGEX.test(line);
 		const isNested = line.startsWith('\t');
 
 		if (this.settings.useList) {
@@ -271,12 +326,13 @@ export default class TimelogPlugin extends Plugin {
 	}
 
 	// Determine if last replacement run in past X seconds
-	isWithinInterval() {
+	isWithinInterval(filePath: string) {
 		const interval = this.settings.replacementInterval;
+		const lastReplacement = this.lastReplacements.get(filePath);
 
 		if (
-			this.lastReplacement &&
-			new Date().getTime() - this.lastReplacement.getTime() <
+			lastReplacement &&
+			new Date().getTime() - lastReplacement.getTime() <
 			interval * 1000
 		) {
 			return false;
@@ -382,6 +438,18 @@ class TimelogSettingTab extends PluginSettingTab {
 						this.plugin.settings.useList = value;
 						await this.plugin.saveSettings();
 						this.plugin.updateStatusBar();
+					}),
+			);
+
+		new Setting(containerEl)
+			.setName('Auto-add date heading')
+			.setDesc('Automatically add a new date heading when the date rolls over (e.g., after midnight)')
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.autoAddDateHeading)
+					.onChange(async (value) => {
+						this.plugin.settings.autoAddDateHeading = value;
+						await this.plugin.saveSettings();
 					}),
 			);
 	}
