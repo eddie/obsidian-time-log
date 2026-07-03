@@ -85,6 +85,10 @@ This repo uses a GitHub Actions workflow that publishes artifacts whenever you p
 
    The GitHub Action uploads `manifest.json` and `main.js` as release assets automatically.
 
+## Contributors
+
+- [leonsbuddydave](https://github.com/leonsbuddydave) – multi-editor-pane timestamp fix, list marker support (`-`/`*`/`+`), and the auto-add date heading on rollover feature.
+
 ## License
 
 MIT
